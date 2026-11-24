@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Raummoden-Analyzer – Modenberechnung &amp; Subwoofer-Platzierung</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
+</script>
+<style>
+:root{
+  --bg:#0f1114;--surface:#171a1f;--surface-2:#1e2228;--border:#2b3038;--border-strong:#3a4150;
+  --fg:#e6e8ec;--muted:#8b93a1;--accent:#f0a830;--accent-fg:#1a1200;--blue:#4da3ff;--green:#5fd38a;--red:#ff5c5c;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--sans:system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.5}
+button,input,select{font:inherit;color:inherit}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+header h1{font-size:15px;margin:0;letter-spacing:.02em}
+header h1 span{color:var(--muted);font-weight:400;margin-left:8px}
+.btn{background:var(--surface-2);border:1px solid var(--border-strong);border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600}
+.btn.sm{padding:3px 8px;font-size:12px}
+.btn.active{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.app{display:grid;grid-template-columns:320px 1fr;gap:12px;padding:12px;max-width:1800px;margin:0 auto}
+aside{display:flex;flex-direction:column;gap:12px}
+main{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-content:start}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.panel>h2{margin:0;padding:8px 12px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.panel>h2 .right{display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-size:12px}
+.body{padding:12px;display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}
+.row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.row.two{grid-template-columns:1fr 1fr}
+label.f{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted)}
+label.f input,label.f select{background:var(--surface-2);border:1px solid var(--border-strong);border-radius:6px;padding:6px 8px;font-family:var(--mono);font-size:13px;width:100%;min-width:0;color:var(--fg)}
+label.f input:focus{outline:none;border-color:var(--accent)}
+input[type=number]{appearance:textfield;-moz-appearance:textfield}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.seg{display:flex;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:6px;padding:2px;gap:2px}
+.seg button{flex:1;border:0;background:transparent;border-radius:4px;padding:4px 8px;cursor:pointer;font-size:12px;color:var(--muted)}
+.seg button.on{background:var(--accent);color:var(--accent-fg);font-weight:600}
+.sub{border:1px solid var(--border);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px;background:var(--surface-2)}
+.sub .hd{display:flex;align-items:center;gap:8px;font-size:12px}
+.sub .dot{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#000}
+.sub .hd .sp{flex:1}
+.sub .row label.f input{padding:4px 6px;font-size:12px}
+.canvas-wrap{position:relative;flex:1;min-height:360px}
+.canvas-wrap canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#view3d{position:relative;flex:1;min-height:360px}
+#view3d canvas{display:block}
+.hint{font-size:11px;color:var(--muted)}
+.legend{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);font-family:var(--mono)}
+.legend .bar{flex:1;height:10px;border-radius:3px;background:linear-gradient(90deg,#1b2a9a,#1e90ff,#20d6c0,#8be04a,#ffe24a,#ff8a2a,#ff2a2a)}
+.chart-wrap{position:relative;flex:1;min-height:280px}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+th,td{padding:5px 8px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+th{position:sticky;top:0;background:var(--surface);color:var(--muted);font-weight:500;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--surface-2)}
+tbody tr.sel{background:rgba(240,168,48,.18)}
+tbody tr.cluster td:first-child{color:var(--accent)}
+.tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px}
+.tag.axial{background:rgba(240,168,48,.2);color:var(--accent)}
+.tag.tangential{background:rgba(77,163,255,.2);color:var(--blue)}
+.tag.oblique{background:rgba(95,211,138,.2);color:var(--green)}
+.tbl-scroll{overflow:auto;flex:1;min-height:0;max-height:420px}
+.filters{display:flex;gap:6px;flex-wrap:wrap;align-items:end}
+.filters label.f{flex:1;min-width:70px}
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.stat{background:var(--surface-2);border-radius:6px;padding:6px 8px}
+.stat b{display:block;font-family:var(--mono);font-size:15px;font-weight:600}
+.stat span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+details summary{cursor:pointer;color:var(--muted);font-size:12px;list-style:none}
+details summary::before{content:"▸ ";color:var(--accent)}
+details[open] summary::before{content:"▾ "}
+@media (max-width:1100px){.app{grid-template-columns:1fr}main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Raummoden-Analyzer <span>20 – 200 Hz · modale Superposition</span></h1>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn" id="btnReset">Zurücksetzen</button>
+    <button class="btn primary" id="btnPdf">PDF-Bericht exportieren</button>
+  </div>
+</header>
+
+<div class="app">
+<aside>
+  <section class="panel">
+    <h2>Raumgeometrie</h2>
+    <div class="body">
+      <div class="seg" id="shapeSeg"><button data-shape="rect" class="on">Rechteck</button><button data-shape="L">L-Form</button></div>
+      <div class="row">
+        <label class="f">Länge 1 (m)<input type="number" step="0.01" min="1" data-k="L1"></label>
+        <label class="f">Breite 1 (m)<input type="number" step="0.01" min="1" data-k="W1"></label>
+        <label class="f">Höhe (m)<input type="number" step="0.01" min="1.5" data-k="H"></label>
+      </div>
+      <div class="row two" id="lFields" hidden>
+        <label class="f">Länge 2 (m)<input type="number" step="0.01" min="0.5" data-k="L2"></label>
+        <label class="f">Breite 2 (m)<input type="number" step="0.01" min="0.5" data-k="W2"></label>
+      </div>
+      <p class="hint" id="lHint" hidden>Segment 2 schließt an der Kante y = Breite 1 an (x von 0 bis Länge 2, Länge 2 ≤ Länge 1). Die Kopplung beider Segmente wird als Näherung mit festem Faktor behandelt.</p>
+      <div class="stats" id="stats"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Subwoofer <span class="right"><button class="btn sm" id="btnAddSub">+ Subwoofer</button></span></h2>
+    <div class="body" id="subList"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Hörplatz &amp; Schnittebene</h2>
+    <div class="body">
+      <div class="row">
+        <label class="f">X (m)<input type="number" step="0.01" data-k="lx"></label>
+        <label class="f">Y (m)<input type="number" step="0.01" data-k="ly"></label>
+        <label class="f">Ohrhöhe Z (m)<input type="number" step="0.01" min="0.2" data-k="earZ"></label>
+      </div>
+      <p class="hint">Klick in die Draufsicht setzt den Hörplatz, Bewegen des Zeigers zeigt die Sonde.</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Erweitert</h2>
+    <div class="body">
+      <details open><summary>Berechnungsparameter</summary>
+        <div class="row" style="margin-top:8px">
+          <label class="f">c (m/s)<input type="number" step="0.1" min="300" max="400" data-k="c"></label>
+          <label class="f">Dämpfung η<input type="number" step="0.01" min="0.01" max="0.5" data-k="eta"></label>
+          <label class="f">n max<input type="number" step="1" min="1" max="8" data-k="nMax"></label>
+        </div>
+        <div class="row two" style="margin-top:8px">
+          <label class="f">f min (Hz)<input type="number" step="1" min="10" data-k="fMin"></label>
+          <label class="f">f max (Hz)<input type="number" step="1" max="300" data-k="fMax"></label>
+        </div>
+      </details>
+    </div>
+  </section>
+</aside>
+
+<main>
+  <section class="panel">
+    <h2>2D-Draufsicht &amp; Heatmap (Ohrhöhe)
+      <span class="right"><div class="seg" id="viewSeg"><button data-view="freq">Frequenz</button><button data-view="band" class="on">Bandmittel</button><button data-view="single">Einzelmode</button></div></span>
+    </h2>
+    <div class="body">
+      <div class="row">
+        <label class="f">Frequenz (Hz) <span id="freqLbl"></span><input type="range" min="20" max="200" step="0.5" data-k="freq" style="padding:0"></label>
+        <label class="f">Dynamik (dB)<input type="number" step="1" min="6" max="60" data-k="dyn"></label>
+        <label class="f">Auflösung<select data-k="grid"><option value="40">Schnell</option><option value="64" selected>Normal</option><option value="96">Fein</option></select></label>
+      </div>
+      <div class="canvas-wrap"><canvas id="c2d"></canvas></div>
+      <div class="legend"><span id="legMin">-30 dB</span><div class="bar"></div><span>0 dB (Maximum)</span></div>
+      <div class="hint" id="probeInfo">Sonde: –</div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>3D-Raummodell <span class="right hint">Drehen: Ziehen · Zoom: Rad · Schwenken: Rechts/2 Finger</span></h2>
+    <div id="view3d"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Frequenzgang am Hörplatz <span class="right hint">rel. dB · Linien = Moden</span></h2>
+    <div class="body"><div class="chart-wrap"><canvas id="chart"></canvas></div></div>
+  </section>
+
+  <section class="panel">
+    <h2>Modenübersicht <span class="right hint" id="modeCount"></span></h2>
+    <div class="body">
+      <div class="filters">
+        <label class="f">Typ<select id="fType"><option value="all">Alle</option><option value="axial">Axial</option><option value="tangential">Tangential</option><option value="oblique">Schräg</option></select></label>
+        <label class="f">von (Hz)<input type="number" id="fLo" value="20" step="1"></label>
+        <label class="f">bis (Hz)<input type="number" id="fHi" value="200" step="1"></label>
+        <button class="btn sm" id="btnClearSel">Auswahl aufheben</button>
+      </div>
+      <div class="tbl-scroll"><table><thead><tr><th>f (Hz)</th><th>Typ</th><th>nx</th><th>ny</th><th>nz</th><th>Seg.</th></tr></thead><tbody id="modeBody"></tbody></table></div>
+    </div>
+  </section>
+</main>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ---------------- Zustand ---------------- */
+const SUB_COLORS = ['#f0a830','#4da3ff','#5fd38a','#ff5c5c'];
+const defaults = () => ({
+  shape:'rect', L1:6.20, W1:4.50, H:2.70, L2:3.00, W2:2.50,
+  c:343, eta:0.05, nMax:4, fMin:20, fMax:200,
+  earZ:1.20, freq:50, view:'band', selMode:null, dyn:30, grid:64,
+  subs:[{x:0.30,y:0.30,z:0.30,gain:0,phase:0,on:true},{x:5.90,y:0.30,z:0.30,gain:0,phase:0,on:true}],
+  lx:3.10, ly:3.00, probe:null,
+});
+let S = defaults();
+const $ = s => document.querySelector(s);
+const clamp = (v,a,b) => Math.min(b,Math.max(a,v));
+const fmt = (v,d=2) => Number(v).toFixed(d);
+
+/* ---------------- Geometrie ---------------- */
+function segments(){
+  const A = {id:'A',x0:0,y0:0,Lx:S.L1,Ly:S.W1,Lz:S.H};
+  if (S.shape==='rect') return [A];
+  return [A,{id:'B',x0:0,y0:S.W1,Lx:Math.min(S.L2,S.L1),Ly:S.W2,Lz:S.H}];
+}
+function bounds(){ const g=segments(); return {maxX:Math.max(...g.map(s=>s.x0+s.Lx)), maxY:Math.max(...g.map(s=>s.y0+s.Ly)), H:S.H}; }
+function segOf(x,y){ return segments().find(g=>x>=g.x0-1e-9&&x<=g.x0+g.Lx+1e-9&&y>=g.y0-1e-9&&y<=g.y0+g.Ly+1e-9)||null; }
+function polygon(){
+  if (S.shape==='rect') return [[0,0],[S.L1,0],[S.L1,S.W1],[0,S.W1]];
+  const L2=Math.min(S.L2,S.L1);
+  return [[0,0],[S.L1,0],[S.L1,S.W1],[L2,S.W1],[L2,S.W1+S.W2],[0,S.W1+S.W2]];
+}
+function volume(){ return segments().reduce((a,g)=>a+g.Lx*g.Ly*g.Lz,0); }
+
+/* ---------------- Moden ---------------- */
+let modeCache = {key:'',modes:[]};
+function computeModes(){
+  const key = JSON.stringify([S.shape,S.L1,S.W1,S.H,S.L2,S.W2,S.c,S.nMax,S.fMax]);
+  if (modeCache.key===key) return modeCache.modes;
+  const out=[]; const N=S.nMax;
+  for (const g of segments()){
+    for (let nx=0;nx<=N;nx++) for (let ny=0;ny<=N;ny++) for (let nz=0;nz<=N;nz++){
+      const f = S.c/2*Math.sqrt((nx/g.Lx)**2+(ny/g.Ly)**2+(nz/g.Lz)**2);
+      if (f > S.fMax*1.5) continue;
+      const zeros=(nx===0)+(ny===0)+(nz===0);
+      const type = zeros===3?'dc':zeros===2?'axial':zeros===1?'tangential':'oblique';
+      out.push({g,seg:g.id,nx,ny,nz,f,type,lam:(nx?2:1)*(ny?2:1)*(nz?2:1),id:`${g.id}-${nx}-${ny}-${nz}`});
+    }
+  }
+  out.sort((a,b)=>a.f-b.f);
+  modeCache={key,modes:out};
+  return out;
+}
+const tableModes = modes => modes.filter(m=>m.type!=='dc' && m.f>=S.fMin && m.f<=S.fMax);
+function psi(m,x,y,z){
+  const g=m.g;
+  return Math.cos(m.nx*Math.PI*(x-g.x0)/g.Lx)*Math.cos(m.ny*Math.PI*(y-g.y0)/g.Ly)*Math.cos(m.nz*Math.PI*z/g.Lz);
+}
+/* Quellgewicht pro Mode: Summe aller aktiven Subwoofer (Pegel, Phase, Segmentkopplung) */
+function sourceWeights(modes){
+  return modes.map(m=>{
+    let w=0;
+    for (const s of S.subs){
+      if (!s.on) continue;
+      const sg=segOf(s.x,s.y); let k=1, sx=s.x, sy=s.y;
+      if (!sg || sg.id!==m.seg){ k=0.5; sx=clamp(sx,m.g.x0,m.g.x0+m.g.Lx); sy=clamp(sy,m.g.y0,m.g.y0+m.g.Ly); }
+      w += k*Math.pow(10,s.gain/20)*(s.phase?-1:1)*psi(m,sx,sy,s.z);
+    }
+    return w*m.lam;
+  });
+}
+/* |p| an (x,y,z) für mehrere Frequenzen: Σ_m Ψm(r)·Wm / (fm² − f² + i·η·fm·f) */
+function pressures(modes,W,x,y,z,freqs){
+  const g=segOf(x,y); const out=new Float64Array(freqs.length);
+  if (!g) { out.fill(NaN); return out; }
+  const terms=[];
+  for (let i=0;i<modes.length;i++){
+    const m=modes[i]; if (m.seg!==g.id || W[i]===0) continue;
+    const a=psi(m,x,y,z)*W[i]; if (Math.abs(a)<1e-12) continue;
+    terms.push(a,m.f);
+  }
+  for (let k=0;k<freqs.length;k++){
+    const f=freqs[k]; let re=0,im=0;
+    for (let t=0;t<terms.length;t+=2){
+      const a=terms[t], fm=terms[t+1];
+      const dr=fm*fm-f*f, di=S.eta*fm*f+1e-6, den=dr*dr+di*di;
+      re+=a*dr/den; im-=a*di/den;
+    }
+    out[k]=Math.hypot(re,im);
+  }
+  return out;
+}
+const logspace=(a,b,n)=>Array.from({length:n},(_,i)=>a*Math.pow(b/a,i/(n-1)));
+
+/* ---------------- Heatmap-Feld ---------------- */
+const hm = document.createElement('canvas');
+let field=null;
+function computeField(modes){
+  const {maxX,maxY}=bounds(); const N=S.grid, M=Math.max(8,Math.round(N*maxY/maxX));
+  let ms=modes, freqs;
+  if (S.view==='single' && S.selMode){ ms=modes.filter(m=>m.id===S.selMode); freqs=[ms[0]?ms[0].f:S.freq]; }
+  else if (S.view==='band') freqs=logspace(S.fMin,S.fMax,24);
+  else freqs=[S.freq];
+  const W=sourceWeights(ms);
+  const vals=new Float32Array(N*M); let max=0;
+  const single = S.view==='single' && ms.length===1;
+  if (single){
+    const m=ms[0]; const exc=Math.abs(W[0]/m.lam);
+    $('#probeInfo').dataset.exc = exc<1e-6 ? `Mode ${m.nx}${m.ny}${m.nz} (${m.f.toFixed(1)} Hz, Seg. ${m.seg}) wird durch die aktuelle Subwoofer-Anordnung ausgelöscht (Anregung ≈ 0). Dargestellt: Modenform |Ψ|.`
+      : `Mode ${m.nx}${m.ny}${m.nz} (${m.f.toFixed(1)} Hz, Seg. ${m.seg}) · relative Anregung ${(20*Math.log10(exc)).toFixed(1)} dB · dargestellt: Modenform |Ψ|.`;
+  } else delete $('#probeInfo').dataset.exc;
+  for (let j=0;j<M;j++) for (let i=0;i<N;i++){
+    const x=(i+0.5)/N*maxX, y=(j+0.5)/M*maxY;
+    if (single){
+      const g=segOf(x,y); const m=ms[0];
+      const r = !g ? NaN : g.id!==m.seg ? 0 : Math.abs(psi(m,x,y,S.earZ));
+      vals[j*N+i]=r; if (r>max) max=r; continue;
+    }
+    const p=pressures(ms,W,x,y,S.earZ,freqs);
+    if (Number.isNaN(p[0])) { vals[j*N+i]=NaN; continue; }
+    let e=0; for (const v of p) e+=v*v; const r=Math.sqrt(e/p.length);
+    vals[j*N+i]=r; if (r>max) max=r;
+  }
+  field={vals,N,M,max};
+  renderHeatmap();
+}
+function jet(t){
+  const stops=[[27,42,154],[30,144,255],[32,214,192],[139,224,74],[255,226,74],[255,138,42],[255,42,42]];
+  const p=clamp(t,0,1)*(stops.length-1), i=Math.floor(p), f=p-i, a=stops[i], b=stops[Math.min(i+1,stops.length-1)];
+  return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f];
+}
+function renderHeatmap(){
+  const {vals,N,M,max}=field; hm.width=N; hm.height=M;
+  const ctx=hm.getContext('2d'); const img=ctx.createImageData(N,M);
+  for (let k=0;k<N*M;k++){
+    const v=vals[k]; const o=k*4;
+    if (Number.isNaN(v) || max<=0){ img.data[o+3]=0; continue; }
+    const dB=20*Math.log10(Math.max(v,1e-12)/max); const t=1+dB/S.dyn;
+    const c=jet(t); img.data[o]=c[0]; img.data[o+1]=c[1]; img.data[o+2]=c[2]; img.data[o+3]=235;
+  }
+  ctx.putImageData(img,0,0);
+  $('#legMin').textContent=`-${S.dyn} dB`;
+}
+
+/* ---------------- 2D-Ansicht ---------------- */
+const c2d=$('#c2d'); let tf={pad:44,scale:1,ox:0,oy:0,w:0,h:0};
+function layout2d(){
+  const r=c2d.parentElement.getBoundingClientRect(); const dpr=window.devicePixelRatio||1;
+  c2d.width=Math.round(r.width*dpr); c2d.height=Math.round(r.height*dpr);
+  const {maxX,maxY}=bounds(); const pad=44;
+  const scale=Math.min((r.width-2*pad)/maxX,(r.height-2*pad)/maxY);
+  tf={pad,scale,ox:(r.width-maxX*scale)/2,oy:(r.height-maxY*scale)/2,w:r.width,h:r.height,dpr};
+}
+const toPx=(x,y)=>({px:tf.ox+x*tf.scale,py:tf.oy+y*tf.scale});
+const toM=(px,py)=>({x:(px-tf.ox)/tf.scale,y:(py-tf.oy)/tf.scale});
+function draw2d(){
+  layout2d();
+  const ctx=c2d.getContext('2d'); ctx.setTransform(tf.dpr,0,0,tf.dpr,0,0);
+  ctx.clearRect(0,0,tf.w,tf.h);
+  const {maxX,maxY}=bounds(); const poly=polygon();
+  const path=()=>{ ctx.beginPath(); poly.forEach(([x,y],i)=>{const p=toPx(x,y); i?ctx.lineTo(p.px,p.py):ctx.moveTo(p.px,p.py);}); ctx.closePath(); };
+  // Heatmap
+  ctx.save(); path(); ctx.clip();
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+  const o=toPx(0,0); ctx.drawImage(hm,o.px,o.py,maxX*tf.scale,maxY*tf.scale);
+  // Raster 1 m
+  ctx.strokeStyle='rgba(255,255,255,.12)'; ctx.lineWidth=1;
+  for (let x=1;x<maxX;x++){ const a=toPx(x,0),b=toPx(x,maxY); ctx.beginPath(); ctx.moveTo(a.px,a.py); ctx.lineTo(b.px,b.py); ctx.stroke(); }
+  for (let y=1;y<maxY;y++){ const a=toPx(0,y),b=toPx(maxX,y); ctx.beginPath(); ctx.moveTo(a.px,a.py); ctx.lineTo(b.px,b.py); ctx.stroke(); }
+  ctx.restore();
+  // Kontur
+  path(); ctx.strokeStyle='#e6e8ec'; ctx.lineWidth=2; ctx.stroke();
+  // Bemaßung
+  ctx.fillStyle='#8b93a1'; ctx.font='11px ui-monospace,monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  const cx=maxX/2, cy=maxY/2;
+  for (let i=0;i<poly.length;i++){
+    const [x1,y1]=poly[i],[x2,y2]=poly[(i+1)%poly.length]; const len=Math.hypot(x2-x1,y2-y1); if (len<0.05) continue;
+    const mx=(x1+x2)/2,my=(y1+y2)/2; let nx=-(y2-y1)/len, ny=(x2-x1)/len;
+    if ((mx-cx)*nx+(my-cy)*ny<0){nx=-nx;ny=-ny;}
+    const p=toPx(mx,my); ctx.save(); ctx.translate(p.px+nx*14,p.py+ny*14);
+    if (Math.abs(x2-x1)<1e-9) ctx.rotate(nx<0?-Math.PI/2:Math.PI/2);
+    ctx.fillText(`${fmt(len)} m`,0,0); ctx.restore();
+  }
+  // Maßstab
+  const sb=toPx(0,maxY); const sy=sb.py+30; ctx.strokeStyle='#e6e8ec'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(sb.px,sy); ctx.lineTo(sb.px+tf.scale,sy); ctx.stroke();
+  ctx.textAlign='left'; ctx.fillText('1 m',sb.px+tf.scale+6,sy);
+  // Hörplatz
+  const lp=toPx(S.lx,S.ly); ctx.strokeStyle='#ffffff'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(lp.px,lp.py,9,0,Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(lp.px-14,lp.py); ctx.lineTo(lp.px+14,lp.py); ctx.moveTo(lp.px,lp.py-14); ctx.lineTo(lp.px,lp.py+14); ctx.stroke();
+  // Sonde
+  if (S.probe){ const pp=toPx(S.probe.x,S.probe.y); ctx.setLineDash([3,3]); ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.beginPath(); ctx.arc(pp.px,pp.py,7,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]); }
+  // Subwoofer
+  S.subs.forEach((s,i)=>{
+    const p=toPx(s.x,s.y); ctx.fillStyle=s.on?SUB_COLORS[i]:'#555'; ctx.strokeStyle='#0f1114'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(p.px,p.py,12,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#000'; ctx.font='bold 12px system-ui'; ctx.textAlign='center'; ctx.fillText(String(i+1),p.px,p.py+0.5);
+    ctx.fillStyle='#e6e8ec'; ctx.font='10px ui-monospace,monospace'; ctx.textAlign='left';
+    ctx.fillText(`${fmt(s.x)} / ${fmt(s.y)} / ${fmt(s.z)}`,p.px+16,p.py-10);
+  });
+}
+let drag=null;
+c2d.addEventListener('pointerdown',e=>{
+  const r=c2d.getBoundingClientRect(); const px=e.clientX-r.left, py=e.clientY-r.top;
+  let hit=-1; S.subs.forEach((s,i)=>{const p=toPx(s.x,s.y); if (Math.hypot(p.px-px,p.py-py)<16) hit=i;});
+  drag={i:hit,moved:false,px,py}; c2d.setPointerCapture(e.pointerId);
+});
+c2d.addEventListener('pointermove',e=>{
+  const r=c2d.getBoundingClientRect(); const px=e.clientX-r.left, py=e.clientY-r.top; const m=toM(px,py);
+  if (drag && drag.i>=0){
+    if (Math.hypot(px-drag.px,py-drag.py)>2) drag.moved=true;
+    if (segOf(m.x,m.y)){ S.subs[drag.i].x=+m.x.toFixed(2); S.subs[drag.i].y=+m.y.toFixed(2); renderSubs(); schedule('field'); }
+    return;
+  }
+  S.probe=segOf(m.x,m.y)?{x:m.x,y:m.y}:null; schedule('light');
+});
+c2d.addEventListener('pointerup',e=>{
+  if (drag && drag.i<0 && !drag.moved){ const r=c2d.getBoundingClientRect(); const m=toM(e.clientX-r.left,e.clientY-r.top); if (segOf(m.x,m.y)){ S.lx=+m.x.toFixed(2); S.ly=+m.y.toFixed(2); bindInputs(); schedule('light'); } }
+  drag=null;
+});
+c2d.addEventListener('pointerleave',()=>{ S.probe=null; schedule('light'); });
+
+/* ---------------- 3D-Ansicht ---------------- */
+const v3=$('#view3d');
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2)); v3.appendChild(renderer.domElement);
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x171a1f);
+const camera=new THREE.PerspectiveCamera(45,1,0.1,200);
+const controls=new OrbitControls(camera,renderer.domElement); controls.enableDamping=true;
+scene.add(new THREE.AmbientLight(0xffffff,0.7));
+const dl=new THREE.DirectionalLight(0xffffff,0.9); dl.position.set(6,10,4); scene.add(dl);
+const roomGroup=new THREE.Group(); scene.add(roomGroup);
+const hmTex=new THREE.CanvasTexture(hm); hmTex.colorSpace=THREE.SRGBColorSpace; hmTex.minFilter=THREE.LinearFilter; hmTex.magFilter=THREE.LinearFilter;
+let planeMesh=null, subMeshes=[], listenerMesh=null, geomKey='';
+function build3d(){
+  const key=JSON.stringify([S.shape,S.L1,S.W1,S.H,S.L2,S.W2]);
+  const {maxX,maxY,H}=bounds();
+  if (key!==geomKey){
+    geomKey=key; roomGroup.clear();
+    const shape=new THREE.Shape(polygon().map(([x,y])=>new THREE.Vector2(x,-y)));
+    const geo=new THREE.ExtrudeGeometry(shape,{depth:H,bevelEnabled:false}); geo.rotateX(-Math.PI/2);
+    roomGroup.add(new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:0x3a4150,transparent:true,opacity:0.12,side:THREE.DoubleSide,depthWrite:false})));
+    roomGroup.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:0xe6e8ec})));
+    const floor=new THREE.Mesh(new THREE.ShapeGeometry(shape).rotateX(-Math.PI/2),new THREE.MeshStandardMaterial({color:0x1e2228,side:THREE.DoubleSide})); floor.position.y=-0.001; roomGroup.add(floor);
+    const grid=new THREE.GridHelper(Math.max(maxX,maxY),Math.round(Math.max(maxX,maxY)),0x3a4150,0x2b3038); grid.position.set(Math.max(maxX,maxY)/2,0.002,Math.max(maxX,maxY)/2); roomGroup.add(grid);
+    planeMesh=new THREE.Mesh(new THREE.PlaneGeometry(maxX,maxY).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({map:hmTex,transparent:true,side:THREE.DoubleSide,depthWrite:false}));
+    planeMesh.position.set(maxX/2,S.earZ,maxY/2); roomGroup.add(planeMesh);
+    listenerMesh=new THREE.Mesh(new THREE.SphereGeometry(0.12,24,16),new THREE.MeshStandardMaterial({color:0xffffff,emissive:0x444444})); roomGroup.add(listenerMesh);
+    subMeshes=[];
+    const d=Math.hypot(maxX,maxY,H); camera.position.set(maxX*1.3,H*1.6+d*0.25,maxY*1.6); controls.target.set(maxX/2,H/2,maxY/2); controls.update();
+  }
+  planeMesh.position.y=S.earZ; listenerMesh.position.set(S.lx,S.earZ,S.ly);
+  while (subMeshes.length>S.subs.length) roomGroup.remove(subMeshes.pop());
+  S.subs.forEach((s,i)=>{
+    if (!subMeshes[i]){ const m=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4),new THREE.MeshStandardMaterial({color:SUB_COLORS[i]})); roomGroup.add(m); subMeshes[i]=m; }
+    subMeshes[i].position.set(s.x,s.z,s.y); subMeshes[i].material.color.set(s.on?SUB_COLORS[i]:'#555555');
+  });
+  hmTex.needsUpdate=true;
+}
+function resize3d(){ const r=v3.getBoundingClientRect(); if (r.width<10||r.height<10) return; renderer.setSize(r.width,r.height,false); camera.aspect=r.width/r.height; camera.updateProjectionMatrix(); }
+(function loop(){ controls.update(); renderer.render(scene,camera); requestAnimationFrame(loop); })();
+
+/* ---------------- Frequenzgang ---------------- */
+const MODE_COLORS={axial:'#f0a830',tangential:'#4da3ff',oblique:'#5fd38a'};
+const modeLines={id:'modeLines',beforeDatasetsDraw(ch){
+  const ms=ch.$modes||[]; const {ctx,chartArea:a,scales:{x}}=ch; ctx.save();
+  let ai=0;
+  for (const m of ms){ const px=x.getPixelForValue(m.f); if (px<a.left||px>a.right) continue;
+    ctx.strokeStyle=MODE_COLORS[m.type]; ctx.globalAlpha=m.type==='axial'?0.9:0.45; ctx.lineWidth=1; ctx.setLineDash(m.type==='axial'?[]:[3,3]);
+    ctx.beginPath(); ctx.moveTo(px,a.top); ctx.lineTo(px,a.bottom); ctx.stroke();
+    if (m.type==='axial'){ ctx.setLineDash([]); ctx.globalAlpha=1; ctx.fillStyle=MODE_COLORS.axial; ctx.font='9px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText(`${m.nx}${m.ny}${m.nz}`,px,a.top+8+(ai++%3)*10); }
+  }
+  ctx.restore();
+}};
+const chart=new Chart($('#chart'),{type:'line',plugins:[modeLines],
+  data:{datasets:[{label:'Hörplatz',data:[],borderColor:'#f0a830',borderWidth:2,pointRadius:0,tension:0.2},{label:'Sonde',data:[],borderColor:'rgba(255,255,255,.7)',borderDash:[4,4],borderWidth:1.5,pointRadius:0,tension:0.2}]},
+  options:{animation:false,responsive:true,maintainAspectRatio:false,parsing:false,interaction:{mode:'nearest',axis:'x',intersect:false},
+    scales:{x:{type:'logarithmic',min:20,max:200,ticks:{color:'#8b93a1',callback:v=>[20,25,30,40,50,60,80,100,125,150,200].includes(Math.round(v))?Math.round(v):''},grid:{color:'rgba(255,255,255,.06)'},title:{display:true,text:'Frequenz (Hz)',color:'#8b93a1'}},
+            y:{ticks:{color:'#8b93a1'},grid:{color:'rgba(255,255,255,.06)'},title:{display:true,text:'Schalldruck (dB rel.)',color:'#8b93a1'}}},
+    plugins:{legend:{labels:{color:'#e6e8ec',boxWidth:18}},tooltip:{callbacks:{title:i=>`${i[0].parsed.x.toFixed(1)} Hz`,label:i=>`${i.dataset.label}: ${i.parsed.y.toFixed(1)} dB`}}}}});
+function updateChart(modes){
+  const freqs=logspace(S.fMin,S.fMax,240); const W=sourceWeights(modes);
+  const pl=pressures(modes,W,S.lx,S.ly,S.earZ,freqs);
+  const toDb=arr=>Array.from(arr,v=>20*Math.log10(Math.max(v,1e-12)));
+  const dl=toDb(pl); const valid=dl.filter(Number.isFinite); const off=valid.length?80-valid.reduce((a,b)=>a+b,0)/valid.length:0;
+  chart.data.datasets[0].data=freqs.map((f,i)=>({x:f,y:Number.isFinite(dl[i])?dl[i]+off:null}));
+  if (S.probe){ const dp=toDb(pressures(modes,W,S.probe.x,S.probe.y,S.earZ,freqs)); chart.data.datasets[1].data=freqs.map((f,i)=>({x:f,y:Number.isFinite(dp[i])?dp[i]+off:null})); chart.data.datasets[1].hidden=false; }
+  else { chart.data.datasets[1].data=[]; chart.data.datasets[1].hidden=true; }
+  chart.options.scales.x.min=S.fMin; chart.options.scales.x.max=S.fMax;
+  chart.$modes=tableModes(modes); chart.update();
+  if (S.probe){ const pv=pressures(modes,W,S.probe.x,S.probe.y,S.earZ,[S.freq])[0]; $('#probeInfo').textContent=`Sonde: X ${fmt(S.probe.x)} m · Y ${fmt(S.probe.y)} m · Z ${fmt(S.earZ)} m · bei ${S.freq} Hz: ${(20*Math.log10(Math.max(pv,1e-12))+off).toFixed(1)} dB rel.`; }
+  else $('#probeInfo').textContent='Sonde: – (Zeiger über die Draufsicht bewegen)';
+  if ($('#probeInfo').dataset.exc) $('#probeInfo').textContent += ' · ' + $('#probeInfo').dataset.exc;
+}
+
+/* ---------------- Tabelle & Statistik ---------------- */
+function renderTable(modes){
+  const t=$('#fType').value, lo=+$('#fLo').value||0, hi=+$('#fHi').value||1e9;
+  const all=tableModes(modes); const rows=all.filter(m=>(t==='all'||m.type===t)&&m.f>=lo&&m.f<=hi);
+  const label={axial:'Axial',tangential:'Tangential',oblique:'Schräg'};
+  $('#modeBody').innerHTML=rows.map((m,i)=>{
+    const prev=all[all.indexOf(m)-1], next=all[all.indexOf(m)+1];
+    const cluster=(prev&&m.f-prev.f<3)||(next&&next.f-m.f<3);
+    return `<tr data-id="${m.id}" class="${m.id===S.selMode?'sel':''} ${cluster?'cluster':''}" title="Klick: Mode in Heatmap isolieren"><td>${m.f.toFixed(1)}</td><td><span class="tag ${m.type}">${label[m.type]}</span></td><td>${m.nx}</td><td>${m.ny}</td><td>${m.nz}</td><td>${m.seg}</td></tr>`;
+  }).join('');
+  const cnt={axial:0,tangential:0,oblique:0}; all.forEach(m=>cnt[m.type]++);
+  $('#modeCount').textContent=`${all.length} Moden · ${cnt.axial} ax · ${cnt.tangential} tan · ${cnt.oblique} schr.`;
+  $('#stats').innerHTML=`<div class="stat"><b>${fmt(volume(),1)}</b><span>m³ Volumen</span></div><div class="stat"><b>${(S.c/(2*Math.max(S.L1,S.W1,S.H))).toFixed(1)}</b><span>Hz tiefste Mode</span></div><div class="stat"><b>${(2000*Math.sqrt(0.5/volume())).toFixed(0)}</b><span>Hz Schroeder (T≈0,5 s)</span></div>`;
+}
+$('#modeBody').addEventListener('click',e=>{ const tr=e.target.closest('tr'); if (!tr) return; S.selMode=tr.dataset.id; S.view='single'; syncSeg(); schedule('field'); });
+$('#btnClearSel').onclick=()=>{ S.selMode=null; if (S.view==='single') S.view='band'; syncSeg(); schedule('field'); };
+['#fType','#fLo','#fHi'].forEach(s=>$(s).addEventListener('input',()=>renderTable(computeModes())));
+
+/* ---------------- Subwoofer-Liste ---------------- */
+function renderSubs(){
+  $('#subList').innerHTML=S.subs.map((s,i)=>`<div class="sub" data-i="${i}">
+    <div class="hd"><span class="dot" style="background:${SUB_COLORS[i]}">${i+1}</span><span>Subwoofer ${i+1}</span><span class="sp"></span>
+      <button class="btn sm ${s.on?'active':''}" data-a="on">${s.on?'Aktiv':'Stumm'}</button>
+      <button class="btn sm ${s.phase?'active':''}" data-a="phase">${s.phase?'180°':'0°'}</button>
+      <button class="btn sm" data-a="del" ${S.subs.length<=1?'disabled':''}>✕</button></div>
+    <div class="row"><label class="f">X (m)<input type="number" step="0.01" value="${fmt(s.x)}" data-p="x"></label><label class="f">Y (m)<input type="number" step="0.01" value="${fmt(s.y)}" data-p="y"></label><label class="f">Z (m)<input type="number" step="0.01" value="${fmt(s.z)}" data-p="z"></label></div>
+    <div class="row two"><label class="f">Pegel (dB)<input type="number" step="0.5" min="-20" max="12" value="${s.gain}" data-p="gain"></label><label class="f">Ohrhöhe-Abstand<input type="text" value="${fmt(Math.abs(S.earZ-s.z))} m" disabled></label></div>
+  </div>`).join('');
+  $('#btnAddSub').disabled=S.subs.length>=4;
+}
+$('#subList').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if (!b) return; const i=+b.closest('.sub').dataset.i; const s=S.subs[i];
+  if (b.dataset.a==='on') s.on=!s.on; else if (b.dataset.a==='phase') s.phase=s.phase?0:1; else if (b.dataset.a==='del') S.subs.splice(i,1);
+  renderSubs(); schedule('field');
+});
+$('#subList').addEventListener('input',e=>{
+  const inp=e.target; if (!inp.dataset.p) return; const i=+inp.closest('.sub').dataset.i; const v=parseFloat(inp.value); if (!Number.isFinite(v)) return;
+  const s=S.subs[i]; const {maxX,maxY,H}=bounds();
+  if (inp.dataset.p==='x') s.x=clamp(v,0,maxX); else if (inp.dataset.p==='y') s.y=clamp(v,0,maxY); else if (inp.dataset.p==='z') s.z=clamp(v,0,H); else s.gain=clamp(v,-20,12);
+  schedule('field');
+});
+$('#btnAddSub').onclick=()=>{ if (S.subs.length>=4) return; const {maxX,maxY}=bounds(); const pos=[[0.3,0.3],[maxX-0.3,0.3],[0.3,S.W1-0.3],[maxX-0.3,S.W1-0.3]][S.subs.length]; S.subs.push({x:pos[0],y:pos[1],z:0.3,gain:0,phase:0,on:true}); renderSubs(); schedule('field'); };
+
+/* ---------------- Eingaben ---------------- */
+function bindInputs(){ document.querySelectorAll('[data-k]').forEach(el=>{ const k=el.dataset.k; if (el.type==='range'||el.tagName==='SELECT'||el.type==='number') el.value=S[k]; }); $('#freqLbl').textContent=`· ${S.freq} Hz`; }
+document.querySelectorAll('[data-k]').forEach(el=>el.addEventListener('input',()=>{
+  const k=el.dataset.k; const v=parseFloat(el.value); if (!Number.isFinite(v)) return;
+  S[k]=k==='grid'||k==='nMax'?Math.round(v):v;
+  if (['L1','W1','H','L2','W2'].includes(k)){ if (v<0.5) return; clampAll(); }
+  if (k==='fMin'&&S.fMin>=S.fMax) S.fMin=S.fMax-10;
+  if (k==='fMax'&&S.fMax<=S.fMin) S.fMax=S.fMin+10;
+  $('#freqLbl').textContent=`· ${S.freq} Hz`;
+  schedule(['lx','ly'].includes(k)?'light':'field');
+}));
+function clampAll(){ const {maxX,maxY,H}=bounds(); S.subs.forEach(s=>{ s.x=clamp(s.x,0,maxX); s.y=clamp(s.y,0,maxY); s.z=clamp(s.z,0,H); if (!segOf(s.x,s.y)){ s.x=Math.min(s.x,S.L1); s.y=Math.min(s.y,S.W1);} }); S.lx=clamp(S.lx,0,maxX); S.ly=clamp(S.ly,0,maxY); if (!segOf(S.lx,S.ly)){S.lx=S.L1/2;S.ly=S.W1/2;} S.earZ=clamp(S.earZ,0.2,H); renderSubs(); bindInputs(); }
+$('#shapeSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if (!b) return; S.shape=b.dataset.shape; syncSeg(); clampAll(); schedule('field'); });
+$('#viewSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if (!b) return; S.view=b.dataset.view; if (S.view==='single'&&!S.selMode){ const m=tableModes(computeModes())[0]; S.selMode=m?m.id:null; } syncSeg(); schedule('field'); });
+function syncSeg(){
+  $('#shapeSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.shape===S.shape));
+  $('#viewSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.view===S.view));
+  $('#lFields').hidden=$('#lHint').hidden=S.shape!=='L';
+  document.querySelector('[data-k=freq]').closest('label').style.opacity=S.view==='freq'?1:0.5;
+}
+$('#btnReset').onclick=()=>{ S=defaults(); modeCache.key=''; syncSeg(); renderSubs(); bindInputs(); schedule('field'); };
+
+/* ---------------- Update-Planung ---------------- */
+let pending=null;
+function schedule(level){ pending=pending==='field'?'field':level; requestAnimationFrame(run); }
+function run(){
+  if (!pending) return; const lvl=pending; pending=null;
+  const modes=computeModes();
+  if (lvl==='field'){ computeField(modes); renderTable(modes); }
+  draw2d(); build3d(); resize3d(); updateChart(modes);
+}
+new ResizeObserver(()=>{ draw2d(); resize3d(); }).observe(c2d.parentElement);
+new ResizeObserver(resize3d).observe(v3);
+
+/* ---------------- PDF-Export ---------------- */
+$('#btnPdf').onclick=()=>{
+  const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'mm',format:'a4'}); const W=210, M=14; let y=M;
+  const txt=(t,size=10,bold=false)=>{ doc.setFont('helvetica',bold?'bold':'normal'); doc.setFontSize(size); doc.text(t,M,y); y+=size*0.5+1.5; };
+  txt('Raummoden-Analyse – Bericht',16,true); txt(new Date().toLocaleString('de-DE'),9); y+=3;
+  txt('1. Raumgeometrie',12,true);
+  txt(`Form: ${S.shape==='rect'?'Rechteck':'L-Form'} · Länge 1 ${fmt(S.L1)} m · Breite 1 ${fmt(S.W1)} m · Höhe ${fmt(S.H)} m${S.shape==='L'?` · Länge 2 ${fmt(S.L2)} m · Breite 2 ${fmt(S.W2)} m`:''}`);
+  txt(`Volumen ${fmt(volume(),1)} m³ · c = ${S.c} m/s · η = ${S.eta} · n max = ${S.nMax} · Analysebereich ${S.fMin}–${S.fMax} Hz · Ohrhöhe ${fmt(S.earZ)} m`);
+  txt(`Hörplatz: X ${fmt(S.lx)} m · Y ${fmt(S.ly)} m · Z ${fmt(S.earZ)} m`); y+=2;
+  txt('2. Subwoofer',12,true);
+  S.subs.forEach((s,i)=>txt(`Sub ${i+1}: X ${fmt(s.x)} m · Y ${fmt(s.y)} m · Z ${fmt(s.z)} m · ${s.gain>=0?'+':''}${s.gain} dB · Phase ${s.phase?'180°':'0°'} · ${s.on?'aktiv':'stumm'}`)); y+=2;
+  const viewLbl=S.view==='band'?`Bandmittel ${S.fMin}–${S.fMax} Hz`:S.view==='single'?`Einzelmode ${S.selMode||''}`:`${S.freq} Hz`;
+  txt(`3. Draufsicht mit Schalldruckverteilung auf Ohrhöhe (${viewLbl}, Dynamik ${S.dyn} dB)`,12,true);
+  const img=c2d.toDataURL('image/png'); const ar=c2d.height/c2d.width; const iw=W-2*M, ih=iw*ar;
+  doc.setFillColor(23,26,31); doc.rect(M,y,iw,ih,'F'); doc.addImage(img,'PNG',M,y,iw,ih); y+=ih+6;
+  if (y>200){ doc.addPage(); y=M; }
+  txt('4. Frequenzgang am Hörplatz',12,true);
+  const cimg=chart.canvas.toDataURL('image/png'); const car=chart.canvas.height/chart.canvas.width; const ch=iw*car;
+  doc.setFillColor(23,26,31); doc.rect(M,y,iw,ch,'F'); doc.addImage(cimg,'PNG',M,y,iw,ch); y+=ch+6;
+  doc.addPage(); y=M; txt('5. Raummoden (axial / tangential / schräg)',12,true);
+  const label={axial:'Axial',tangential:'Tangential',oblique:'Schräg'};
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text(['f (Hz)','Typ','nx','ny','nz','Seg.'],M,y,{}); 
+  const cols=[M,M+28,M+60,M+72,M+84,M+96]; ['f (Hz)','Typ','nx','ny','nz','Seg.'].forEach((h,i)=>doc.text(h,cols[i],y)); y+=5; doc.setFont('helvetica','normal');
+  for (const m of tableModes(computeModes())){ if (y>285){ doc.addPage(); y=M; } [m.f.toFixed(1),label[m.type],String(m.nx),String(m.ny),String(m.nz),m.seg].forEach((v,i)=>doc.text(v,cols[i],y)); y+=4.5; }
+  doc.save('raummoden-bericht.pdf');
+};
+
+/* ---------------- Start ---------------- */
+syncSeg(); renderSubs(); bindInputs(); schedule('field');
+</script>
+</body>
+</html>
