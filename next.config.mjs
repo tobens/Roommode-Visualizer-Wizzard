@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
   allowedDevOrigins: ['**.run.app', '**.googleusercontent.com', '**.google.com', '127.0.0.1'],
   typescript: {
     ignoreBuildErrors: true,
