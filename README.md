@@ -4,8 +4,7 @@ Ein interaktives Webtool zur Analyse und Visualisierung von Raummoden, Schalldru
 
 An interactive web application for analyzing and visualizing room modes, sound-pressure distributions, and subwoofer placement.
 
-**Live-Demo / Live demo:** https://raummoden-visualizer.vercel.app
-
+**Live-Demo / Live demo:** https://v0-roommode-visualizer-wizzard-omega.vercel.app/
 ---
 
 # 🇩🇪 Deutsch
